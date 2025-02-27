@@ -1,91 +1,96 @@
 // app/auth/register/page.tsx
 "use client";
 
-import { useState } from "react";
-import { supabase } from "../../lib/supabase";
+import { useState, useEffect } from "react";
+import { supabase } from "../../../lib/supabase";
 
 export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [username, setUsername] = useState(""); // Nuovo campo per l'username
+  const [username, setUsername] = useState(""); // Campo per l'username
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   const handleRegister = async () => {
+    setError(null); // Resetta eventuali errori precedenti
+
+    // Validazione dei campi
     if (!validateEmail(email)) {
-      setError("Inserisci un indirizzo email valida.");
+      setError("Inserisci un indirizzo email valido.");
       return;
     }
-  
+
     if (!validatePassword(password)) {
       setError(
         "La password deve contenere almeno 8 caratteri, una lettera maiuscola, una minuscola e un numero."
       );
       return;
     }
-  
+
     if (!validateUsername(username)) {
       setError("L'username deve contenere almeno 3 caratteri e non può contenere spazi.");
       return;
     }
-  
+
     // Verifica se l'username è già in uso
     const { data: existingUsers, error: checkError } = await supabase
       .from("profiles")
       .select("id")
-      .eq("username", username);
-  
+      .eq("username", username)
+      .limit(1);
+
     if (checkError) {
       console.error("Errore durante la verifica dell'username:", checkError.message);
       setError("Impossibile verificare l'username. Riprova più tardi.");
       return;
     }
-  
+
     if (existingUsers && existingUsers.length > 0) {
       setError("Questo username è già in uso. Scegline uno diverso.");
       return;
     }
-  
+
     // Effettua la registrazione
-    const { data: authData, error: authError } = await supabase.auth.signUp({
+    const { error: authError } = await supabase.auth.signUp({
       email,
       password,
     });
-  
-    if (authError || !authData.user) {
-      console.error("Errore durante la registrazione:", authError?.message);
-      setError(authError?.message || "Impossibile completare la registrazione.");
+
+    if (authError) {
+      console.error("Errore durante la registrazione:", authError.message);
+      setError(authError.message || "Impossibile completare la registrazione.");
       return;
     }
-  
-    const userId = authData.user.id; // Ottieni l'ID dell'utente appena registrato
-  
-    // Attendi la conferma della sessione
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-  
-    if (sessionError || !sessionData.session || !sessionData.session.user) {
-      console.error("Impossibile recuperare la sessione dell'utente.");
-      setError("Errore durante la creazione del profilo.");
-      return;
-    }
-  
-    // Crea un record nella tabella profiles
-    const { error: profileError } = await supabase.from("profiles").insert({
-      id: userId, // Usa l'ID restituito da Supabase
-      username: username.trim(),
-      full_name: "",
-      avatar_url: null,
+
+    setMessage("Registrazione avvenuta con successo! Attendi la creazione del profilo...");
+
+    // Ascolta il cambiamento di stato di autenticazione
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === "SIGNED_IN" && session?.user) {
+        const userId = session.user.id;
+
+        // Crea un record nella tabella profiles
+        const { error: profileError } = await supabase.from("profiles").insert({
+          id: userId,
+          username: username.trim(),
+          full_name: "",
+          avatar_url: null,
+        });
+
+        if (profileError) {
+          console.error("Errore durante la creazione del profilo:", profileError.message);
+          setError("Errore durante la creazione del profilo.");
+        } else {
+          setMessage("Profilo creato con successo! Controlla la tua email per verificare l'account.");
+          setEmail("");
+          setPassword("");
+          setUsername("");
+        }
+
+        // Rimuovi l'ascoltatore dopo aver completato l'operazione
+        subscription.unsubscribe();
+      }
     });
-  
-    if (profileError) {
-      console.error("Errore durante la creazione del profilo:", profileError.message);
-      setError("Errore durante la creazione del profilo.");
-    } else {
-      setMessage("Registrazione avvenuta con successo! Verifica la tua email.");
-      setEmail("");
-      setPassword("");
-      setUsername("");
-    }
   };
 
   const validateEmail = (email: string): boolean => {
