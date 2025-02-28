@@ -8,26 +8,33 @@ interface Survey {
   title: string;
   options: string[];
   votes: number[];
-  hasVoted: boolean; // Flag per indicare se l'utente ha già votato
+  hasVoted: boolean;
 }
 
 export default function SurveysPage() {
   const [surveys, setSurveys] = useState<Survey[]>([]);
   const [user, setUser] = useState<any | null>(null);
   const [selectedOptions, setSelectedOptions] = useState<Record<string, number[]>>({});
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchUserAndSurveys = async () => {
       try {
+        setLoading(true);
+
         // Recupera la sessione dell'utente
         const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
         if (sessionError) {
           console.error("Errore durante il recupero della sessione:", sessionError.message);
           return;
         }
-        setUser(sessionData?.session?.user || null);
 
-        // Recupera tutti i sondaggi
+        // Aggiorna lo stato dell'utente solo se è diverso da quello attuale
+        if (sessionData?.session?.user?.id !== user?.id) {
+          setUser(sessionData?.session?.user || null);
+        }
+
+        // Recupera i sondaggi
         const { data: surveysData, error: surveysError } = await supabase.from("surveys").select("*");
         if (surveysError) {
           console.error("Errore durante il recupero dei sondaggi:", surveysError.message);
@@ -36,33 +43,27 @@ export default function SurveysPage() {
 
         // Recupera i sondaggi votati dall'utente
         const votedSurveysMap: Record<string, boolean> = {};
-        if (user) {
+        if (sessionData?.session?.user) {
           const { data: votedData } = await supabase
             .from("survey_participants")
             .select("survey_id")
-            .eq("user_id", user.id);
+            .eq("user_id", sessionData.session.user.id);
 
           votedData?.forEach((voted) => {
             votedSurveysMap[voted.survey_id] = true;
           });
         }
 
-        // Imposta lo stato iniziale dei sondaggi con il flag hasVoted
+        // Imposta lo stato dei sondaggi
         setSurveys(
           surveysData.map((survey: any) => {
             let votesArray: number[] = [];
 
             try {
-              // Tenta di parsificare votes come JSON
-              votesArray = JSON.parse(JSON.stringify(survey.votes || "[]"));
-
-              // Verifica che votesArray abbia la stessa lunghezza delle opzioni
-              if (votesArray.length !== survey.options.length) {
-                votesArray = Array(survey.options.length).fill(0); // Inizializza con zeri
-              }
+              votesArray = JSON.parse(survey.votes || "[]");
             } catch (error) {
               console.error("Errore durante la parsificazione dei voti:", error);
-              votesArray = Array(survey.options.length).fill(0); // Inizializza con zeri in caso di errore
+              votesArray = Array(survey.options.length).fill(0);
             }
 
             return {
@@ -76,13 +77,14 @@ export default function SurveysPage() {
         );
       } catch (error) {
         console.error("Errore generico durante il caricamento dei sondaggi:", error);
+      } finally {
+        setLoading(false);
       }
     };
 
     fetchUserAndSurveys();
-  }, []);
+  }, [user]); // Esegui solo quando `user` cambia
 
-  // Gestisci la selezione/deselezione delle opzioni
   const handleOptionToggle = (surveyId: string, optionIndex: number) => {
     if (!user) return;
 
@@ -104,7 +106,6 @@ export default function SurveysPage() {
     });
   };
 
-  // Gestisci il voto multiplo
   const handleVote = async (surveyId: string) => {
     if (!user) {
       alert("Devi essere autenticato per votare.");
@@ -124,22 +125,19 @@ export default function SurveysPage() {
       return;
     }
 
-    // Aggiorna i voti nel sondaggio
     const updatedVotes = survey.votes.map((vote, index) =>
       optionsSelected.includes(index) ? vote + 1 : vote
     );
 
-    // Verifica che la lunghezza dell'array updatedVotes corrisponda alle opzioni
     if (updatedVotes.length !== survey.options.length) {
       console.error("La lunghezza dell'array votes non corrisponde alle opzioni.");
       alert("Si è verificato un errore durante il conteggio dei voti.");
       return;
     }
 
-    // Aggiorna il database con i voti
     const { error: updateError } = await supabase
       .from("surveys")
-      .update({ votes: JSON.stringify(updatedVotes) }) // Memorizza i voti come stringa JSON
+      .update({ votes: JSON.stringify(updatedVotes) })
       .eq("id", surveyId);
 
     if (updateError) {
@@ -148,20 +146,10 @@ export default function SurveysPage() {
       return;
     }
 
-    // Aggiorna lo stato locale
-    setSurveys((prevSurveys) =>
-      prevSurveys.map((s) =>
-        s.id === surveyId
-          ? { ...s, votes: updatedVotes, hasVoted: true } // Imposta hasVoted a true
-          : s
-      )
-    );
-
-    // Registra la partecipazione (usa upsert per evitare duplicati)
     const { error: participationError } = await supabase.from("survey_participants").upsert({
       user_id: user.id,
       survey_id: surveyId,
-      votes: JSON.stringify(optionsSelected), // Memorizza le opzioni selezionate come stringa JSON
+      votes: JSON.stringify(optionsSelected),
     });
 
     if (participationError) {
@@ -170,12 +158,24 @@ export default function SurveysPage() {
       return;
     }
 
+    setSurveys((prevSurveys) =>
+      prevSurveys.map((s) =>
+        s.id === surveyId
+          ? { ...s, votes: updatedVotes, hasVoted: true }
+          : s
+      )
+    );
+
     alert("Voto registrato con successo!");
     setSelectedOptions((prevSelectedOptions) => ({
       ...prevSelectedOptions,
-      [surveyId]: [], // Resetta le selezioni dopo aver votato
+      [surveyId]: [],
     }));
   };
+
+  if (loading) {
+    return <p>Caricamento...</p>;
+  }
 
   return (
     <div className="p-8">
@@ -204,7 +204,7 @@ export default function SurveysPage() {
                           checked={
                             selectedOptions[survey.id]?.includes(index) || false
                           }
-                          disabled={survey.hasVoted} // Disabilita se l'utente ha già votato
+                          disabled={survey.hasVoted}
                           onChange={() => handleOptionToggle(survey.id, index)}
                           className={`ml-2 cursor-pointer rounded focus:ring-2 focus:ring-blue-500 ${survey.hasVoted && "bg-gray-200 cursor-not-allowed opacity-50"
                             }`}
@@ -214,7 +214,7 @@ export default function SurveysPage() {
                   </li>
                 ))}
               </ul>
-              {user && !survey.hasVoted && ( // Mostra il bottone solo se l'utente non ha votato
+              {user && !survey.hasVoted && (
                 <button
                   onClick={() => handleVote(survey.id)}
                   className="mt-2 bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 w-full"

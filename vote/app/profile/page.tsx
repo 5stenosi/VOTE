@@ -12,7 +12,6 @@ interface User {
 interface Profile {
     id: string;
     username: string;
-    full_name: string;
     avatar_url: string | null;
     updated_at: string;
 }
@@ -70,7 +69,6 @@ export default function ProfilePage() {
                     const { error: createProfileError } = await supabase.from("profiles").upsert({
                         id: sessionUser.id,
                         username: sessionUser.email.split("@")[0],
-                        full_name: "",
                         avatar_url: "/default-avatar.png",
                     });
 
@@ -86,7 +84,6 @@ export default function ProfilePage() {
                     setProfile({
                         id: sessionUser.id,
                         username: sessionUser.email.split("@")[0],
-                        full_name: "",
                         avatar_url: "/default-avatar.png",
                         updated_at: new Date().toISOString(),
                     });
@@ -228,6 +225,15 @@ export default function ProfilePage() {
 
     if (!user || !profile) return <div>Caricamento...</div>;
 
+    const parseVotes = (votes: any): number[] => {
+        try {
+            return JSON.parse(votes);
+        } catch (error) {
+            console.error("Errore durante la parsificazione dei voti:", error);
+            return [];
+        }
+    };
+
     return (
         <div className="flex justify-center items-center h-screen bg-gray-100">
             <div className="p-8 bg-white shadow-md rounded-md w-full max-w-lg">
@@ -260,6 +266,7 @@ export default function ProfilePage() {
                             "/default-avatars/avatar2.png",
                             "/default-avatars/avatar3.png",
                             "/default-avatars/avatar4.png",
+                            "/default-avatars/avatar5.png",
                         ].map((avatarUrl) => (
                             <div
                                 key={avatarUrl}
@@ -302,14 +309,24 @@ export default function ProfilePage() {
                         <ul>
                             {surveysCreated.map((survey) => (
                                 <li key={survey.id} className="mb-2">
-                                    {survey.title}
+                                    <a href={`/surveys`} className="text-blue-500 hover:underline">
+                                        {survey.title}
+                                    </a>
+                                    <p className="text-gray-600">
+                                        {survey.options.map((option, index) => (
+                                            <span key={index}>
+                                                {option}: {parseVotes(survey.votes)[index]} {parseVotes(survey.votes)[index] === 1 ? "voto" : "voti"}
+                                                {index < survey.options.length - 1 && ", "}
+                                            </span>
+                                        ))}
+                                    </p>
                                 </li>
                             ))}
                         </ul>
                     ) : (
                         <p className="text-gray-500">Non hai creato alcun sondaggio.</p>
                     )}
-                </div>
+                </div>  
 
                 {/* Sondaggi Votati */}
                 <div>

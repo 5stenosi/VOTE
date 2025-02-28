@@ -7,7 +7,6 @@ import { supabase } from "../../../lib/supabase";
 export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [username, setUsername] = useState(""); // Campo per l'username
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -24,29 +23,6 @@ export default function RegisterPage() {
       setError(
         "La password deve contenere almeno 8 caratteri, una lettera maiuscola, una minuscola e un numero."
       );
-      return;
-    }
-
-    if (!validateUsername(username)) {
-      setError("L'username deve contenere almeno 3 caratteri e non può contenere spazi.");
-      return;
-    }
-
-    // Verifica se l'username è già in uso
-    const { data: existingUsers, error: checkError } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("username", username)
-      .limit(1);
-
-    if (checkError) {
-      console.error("Errore durante la verifica dell'username:", checkError.message);
-      setError("Impossibile verificare l'username. Riprova più tardi.");
-      return;
-    }
-
-    if (existingUsers && existingUsers.length > 0) {
-      setError("Questo username è già in uso. Scegline uno diverso.");
       return;
     }
 
@@ -72,8 +48,6 @@ export default function RegisterPage() {
         // Crea un record nella tabella profiles
         const { error: profileError } = await supabase.from("profiles").insert({
           id: userId,
-          username: username.trim(),
-          full_name: "",
           avatar_url: null,
         });
 
@@ -84,7 +58,6 @@ export default function RegisterPage() {
           setMessage("Profilo creato con successo! Controlla la tua email per verificare l'account.");
           setEmail("");
           setPassword("");
-          setUsername("");
         }
 
         // Rimuovi l'ascoltatore dopo aver completato l'operazione
@@ -103,24 +76,12 @@ export default function RegisterPage() {
     return passwordRegex.test(password);
   };
 
-  const validateUsername = (username: string): boolean => {
-    const usernameRegex = /^[a-zA-Z0-9_]{3,}$/; // Almeno 3 caratteri, solo lettere, numeri e underscore
-    return usernameRegex.test(username);
-  };
-
   return (
     <div className="flex justify-center items-center h-screen bg-gray-100">
       <div className="p-8 bg-white shadow-md rounded-md w-96">
         <h2 className="text-2xl font-bold mb-4">Registra un account</h2>
         {message && <p className="text-green-500 mb-4">{message}</p>}
         {error && <p className="text-red-500 mb-4">{error}</p>}
-        <input
-          type="text"
-          placeholder="Username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          className="w-full p-2 mb-4 border rounded-md"
-        />
         <input
           type="email"
           placeholder="Email"
