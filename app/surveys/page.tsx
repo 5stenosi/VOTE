@@ -12,12 +12,21 @@ interface Survey {
   hasVoted: boolean;
 }
 
+interface SupabaseSurvey {
+  id: string;
+  title: string;
+  options: string[];
+  votes: string; // I voti sono memorizzati come stringa nel database
+  user_id: string;
+  created_at: string;
+}
+
 export default function SurveysPage() {
   const [surveys, setSurveys] = useState<Survey[]>([]);
-  const [user, setUser] = useState<User | null>(null); // Usa il tipo User invece di any
+  const [user, setUser] = useState<User | null>(null);
   const [selectedOptions, setSelectedOptions] = useState<Record<string, number[]>>({});
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null); // Stato per gestire gli errori
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchUserAndSurveys = async () => {
@@ -66,7 +75,7 @@ export default function SurveysPage() {
 
         // Imposta lo stato dei sondaggi
         setSurveys(
-          surveysData.map((survey: any) => {
+          (surveysData as SupabaseSurvey[]).map((survey) => {
             let votesArray: number[] = [];
 
             try {
@@ -94,7 +103,7 @@ export default function SurveysPage() {
     };
 
     fetchUserAndSurveys();
-  }, [user]); // Esegui solo quando `user` cambia
+  }, [user]);
 
   const handleOptionToggle = (surveyId: string, optionIndex: number) => {
     if (!user) return;
@@ -196,7 +205,7 @@ export default function SurveysPage() {
   return (
     <div className="p-8">
       <h2 className="text-2xl font-bold mb-4">Elenco sondaggi</h2>
-      {error && <p className="text-red-500 mb-4">{error}</p>} {/* Mostra l'errore se presente */}
+      {error && <p className="text-red-500 mb-4">{error}</p>}
       {surveys.length > 0 ? (
         <ul>
           {surveys.map((survey) => (
@@ -206,7 +215,7 @@ export default function SurveysPage() {
             >
               <h3 className="text-lg font-bold">{survey.title}</h3>
               <ul>
-                {survey.options.map((option: string, index: number) => (
+                {survey.options.map((option, index) => (
                   <li
                     key={index}
                     className="ml-4 flex justify-between items-center"
