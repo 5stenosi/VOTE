@@ -1,17 +1,17 @@
-// app/layout.tsx
 "use client";
 
 import "../styles/styles.css";
 import Navbar from "../components/Navbar";
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
+import { User } from "@supabase/supabase-js"; // Importa il tipo User
 
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const [user, setUser] = useState<any | null>(null);
+  const [user, setUser] = useState<User | null>(null); // Sostituisci any con User
 
   useEffect(() => {
     const checkUser = async () => {

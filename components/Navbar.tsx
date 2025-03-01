@@ -3,9 +3,10 @@
 
 import Link from "next/link";
 import { supabase } from "../lib/supabase";
+import { User } from "@supabase/supabase-js";
 
 interface NavbarProps {
-    user: any | null;
+    user: User | null;
 }
 
 export default function Navbar({ user }: NavbarProps) {

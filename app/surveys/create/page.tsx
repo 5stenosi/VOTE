@@ -1,24 +1,32 @@
-// app/surveys/create/page.tsx
 "use client";
 
 import { useState, useEffect } from "react";
 import { supabase } from "../../../lib/supabase";
 import { useRouter } from "next/navigation";
+import { User } from "@supabase/supabase-js"; // Importa il tipo User da Supabase
 
 export default function CreateSurveyPage() {
   const [title, setTitle] = useState("");
   const [options, setOptions] = useState<string[]>([""]);
-  const [user, setUser] = useState<any | null>(null);
+  const [user, setUser] = useState<User | null>(null); // Usa il tipo User invece di any
+  const [error, setError] = useState<string | null>(null); // Stato per gestire gli errori
   const router = useRouter();
 
   useEffect(() => {
     const checkUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setUser(session?.user || null);
+      try {
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
-      if (!session || !session.user) {
-        alert("Devi essere autenticato per creare un sondaggio.");
-        router.push("/auth/login");
+        if (sessionError || !session?.user) {
+          alert("Devi essere autenticato per creare un sondaggio.");
+          router.push("/auth/login");
+          return;
+        }
+
+        setUser(session.user);
+      } catch (error) {
+        console.error("Errore durante il recupero della sessione:", error);
+        setError("Si è verificato un errore durante il caricamento dell'utente.");
       }
     };
 
@@ -39,22 +47,33 @@ export default function CreateSurveyPage() {
       return;
     }
 
-    const survey = {
-      title,
-      options,
-      votes: Array(options.length).fill(0),
-      user_id: user?.id, // Associa il sondaggio all'utente corrente
-    };
+    if (!user) {
+      alert("Devi essere autenticato per creare un sondaggio.");
+      return;
+    }
 
-    const { error } = await supabase.from("surveys").insert(survey);
+    try {
+      const survey = {
+        title,
+        options,
+        votes: Array(options.length).fill(0),
+        user_id: user.id, // Associa il sondaggio all'utente corrente
+      };
 
-    if (error) {
-      console.error("Errore durante la creazione del sondaggio:", error.message);
-      alert("Si è verificato un errore. Riprova più tardi.");
-    } else {
-      alert("Sondaggio creato con successo!");
-      setTitle("");
-      setOptions([""]);
+      const { error } = await supabase.from("surveys").insert(survey);
+
+      if (error) {
+        console.error("Errore durante la creazione del sondaggio:", error.message);
+        setError("Si è verificato un errore. Riprova più tardi.");
+      } else {
+        alert("Sondaggio creato con successo!");
+        setTitle("");
+        setOptions([""]);
+        setError(null); // Resetta eventuali errori precedenti
+      }
+    } catch (error) {
+      console.error("Errore generico durante la creazione del sondaggio:", error);
+      setError("Si è verificato un errore. Riprova più tardi.");
     }
   };
 
@@ -64,6 +83,7 @@ export default function CreateSurveyPage() {
     <div className="flex justify-center items-center h-screen bg-gray-100">
       <div className="p-8 bg-white shadow-md rounded-md w-96">
         <h2 className="text-2xl font-bold mb-4">Crea un sondaggio</h2>
+        {error && <p className="text-red-500 mb-4">{error}</p>} {/* Mostra l'errore se presente */}
         <input
           type="text"
           placeholder="Titolo del sondaggio"

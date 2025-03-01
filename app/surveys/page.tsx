@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
+import { User } from "@supabase/supabase-js"; // Importa il tipo User da Supabase
 
 interface Survey {
   id: string;
@@ -13,9 +14,10 @@ interface Survey {
 
 export default function SurveysPage() {
   const [surveys, setSurveys] = useState<Survey[]>([]);
-  const [user, setUser] = useState<any | null>(null);
+  const [user, setUser] = useState<User | null>(null); // Usa il tipo User invece di any
   const [selectedOptions, setSelectedOptions] = useState<Record<string, number[]>>({});
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null); // Stato per gestire gli errori
 
   useEffect(() => {
     const fetchUserAndSurveys = async () => {
@@ -26,6 +28,7 @@ export default function SurveysPage() {
         const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
         if (sessionError) {
           console.error("Errore durante il recupero della sessione:", sessionError.message);
+          setError("Si è verificato un errore durante il caricamento dell'utente.");
           return;
         }
 
@@ -38,16 +41,23 @@ export default function SurveysPage() {
         const { data: surveysData, error: surveysError } = await supabase.from("surveys").select("*");
         if (surveysError) {
           console.error("Errore durante il recupero dei sondaggi:", surveysError.message);
+          setError("Si è verificato un errore durante il caricamento dei sondaggi.");
           return;
         }
 
         // Recupera i sondaggi votati dall'utente
         const votedSurveysMap: Record<string, boolean> = {};
         if (sessionData?.session?.user) {
-          const { data: votedData } = await supabase
+          const { data: votedData, error: votedError } = await supabase
             .from("survey_participants")
             .select("survey_id")
             .eq("user_id", sessionData.session.user.id);
+
+          if (votedError) {
+            console.error("Errore durante il recupero dei sondaggi votati:", votedError.message);
+            setError("Si è verificato un errore durante il caricamento dei sondaggi votati.");
+            return;
+          }
 
           votedData?.forEach((voted) => {
             votedSurveysMap[voted.survey_id] = true;
@@ -77,6 +87,7 @@ export default function SurveysPage() {
         );
       } catch (error) {
         console.error("Errore generico durante il caricamento dei sondaggi:", error);
+        setError("Si è verificato un errore durante il caricamento dei sondaggi.");
       } finally {
         setLoading(false);
       }
@@ -135,42 +146,47 @@ export default function SurveysPage() {
       return;
     }
 
-    const { error: updateError } = await supabase
-      .from("surveys")
-      .update({ votes: JSON.stringify(updatedVotes) })
-      .eq("id", surveyId);
+    try {
+      const { error: updateError } = await supabase
+        .from("surveys")
+        .update({ votes: JSON.stringify(updatedVotes) })
+        .eq("id", surveyId);
 
-    if (updateError) {
-      console.error("Errore durante l'aggiornamento dei voti:", updateError.message);
-      alert("Impossibile aggiornare i voti. Riprova più tardi.");
-      return;
+      if (updateError) {
+        console.error("Errore durante l'aggiornamento dei voti:", updateError.message);
+        setError("Impossibile aggiornare i voti. Riprova più tardi.");
+        return;
+      }
+
+      const { error: participationError } = await supabase.from("survey_participants").upsert({
+        user_id: user.id,
+        survey_id: surveyId,
+        votes: JSON.stringify(optionsSelected),
+      });
+
+      if (participationError) {
+        console.error("Errore durante il registro della partecipazione:", participationError.message);
+        setError("Impossibile registrare il voto. Riprova più tardi.");
+        return;
+      }
+
+      setSurveys((prevSurveys) =>
+        prevSurveys.map((s) =>
+          s.id === surveyId
+            ? { ...s, votes: updatedVotes, hasVoted: true }
+            : s
+        )
+      );
+
+      alert("Voto registrato con successo!");
+      setSelectedOptions((prevSelectedOptions) => ({
+        ...prevSelectedOptions,
+        [surveyId]: [],
+      }));
+    } catch (error) {
+      console.error("Errore generico durante il voto:", error);
+      setError("Si è verificato un errore durante il voto. Riprova più tardi.");
     }
-
-    const { error: participationError } = await supabase.from("survey_participants").upsert({
-      user_id: user.id,
-      survey_id: surveyId,
-      votes: JSON.stringify(optionsSelected),
-    });
-
-    if (participationError) {
-      console.error("Errore durante il registro della partecipazione:", participationError.message);
-      alert("Impossibile registrare il voto. Riprova più tardi.");
-      return;
-    }
-
-    setSurveys((prevSurveys) =>
-      prevSurveys.map((s) =>
-        s.id === surveyId
-          ? { ...s, votes: updatedVotes, hasVoted: true }
-          : s
-      )
-    );
-
-    alert("Voto registrato con successo!");
-    setSelectedOptions((prevSelectedOptions) => ({
-      ...prevSelectedOptions,
-      [surveyId]: [],
-    }));
   };
 
   if (loading) {
@@ -180,6 +196,7 @@ export default function SurveysPage() {
   return (
     <div className="p-8">
       <h2 className="text-2xl font-bold mb-4">Elenco sondaggi</h2>
+      {error && <p className="text-red-500 mb-4">{error}</p>} {/* Mostra l'errore se presente */}
       {surveys.length > 0 ? (
         <ul>
           {surveys.map((survey) => (

@@ -1,4 +1,3 @@
-// app/profile/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -24,6 +23,11 @@ interface Survey {
     votes: number[];
     user_id: string;
     created_at: string;
+}
+
+interface VotedSurvey {
+    survey_id: string;
+    surveys: Survey[]; // Cambiato da Survey a Survey[]
 }
 
 export default function ProfilePage() {
@@ -108,7 +112,7 @@ export default function ProfilePage() {
                     setError("Impossibile caricare i tuoi sondaggi creati. Riprova più tardi.");
                 } else {
                     // Converti i dati in Survey[]
-                    const typedCreatedSurveys = createdSurveys?.map((survey: any) => ({
+                    const typedCreatedSurveys = createdSurveys?.map((survey: Survey) => ({
                         id: survey.id,
                         title: survey.title,
                         options: survey.options,
@@ -136,12 +140,20 @@ export default function ProfilePage() {
                     // Rimuovi duplicati basati sull'ID del sondaggio
                     const uniqueVotedSurveys = Array.from(
                         new Map(
-                            votedSurveys?.map((v: any) => [v.surveys.id, v.surveys])
+                            votedSurveys
+                                ?.map((v: VotedSurvey) => {
+                                    if (v.surveys && v.surveys.length > 0) {
+                                        const survey = v.surveys[0]; // Prendi il primo elemento dell'array
+                                        return [survey.id, survey] as [string, Survey]; // Usa l'ID del sondaggio come chiave
+                                    }
+                                    return null; // Ignora i valori nulli
+                                })
+                                .filter((entry): entry is [string, Survey] => entry !== null) // Filtra i valori nulli
                         ).values()
                     );
 
                     // Converti i dati in Survey[]
-                    const typedVotedSurveys = uniqueVotedSurveys.map((survey: any) => ({
+                    const typedVotedSurveys = Array.from(uniqueVotedSurveys).map((survey) => ({
                         id: survey.id,
                         title: survey.title,
                         options: survey.options,
@@ -226,7 +238,7 @@ export default function ProfilePage() {
 
     if (!user || !profile) return <div>Caricamento...</div>;
 
-    const parseVotes = (votes: any): number[] => {
+    const parseVotes = (votes: string): number[] => {
         try {
             return JSON.parse(votes);
         } catch (error) {
@@ -279,6 +291,8 @@ export default function ProfilePage() {
                                     src={avatarUrl}
                                     alt="Avatar predefinito"
                                     className="w-24 h-24 rounded-full mx-auto"
+                                    width={96} // Add width property
+                                    height={96} // Add height property
                                 />
                             </div>
                         ))}
@@ -292,6 +306,8 @@ export default function ProfilePage() {
                         src={selectedAvatar || profile.avatar_url || "/default-avatar.png"}
                         alt="Foto profilo"
                         className="w-24 h-24 rounded-full mx-auto mb-2"
+                        width={96} // Add width property
+                        height={96} // Add height property
                     />
                 </div>
 
@@ -314,12 +330,18 @@ export default function ProfilePage() {
                                         {survey.title}
                                     </a>
                                     <p className="text-gray-600">
-                                        {survey.options.map((option, index) => (
-                                            <span key={index}>
-                                                {option}: {parseVotes(survey.votes)[index]} {parseVotes(survey.votes)[index] === 1 ? "voto" : "voti"}
-                                                {index < survey.options.length - 1 && ", "}
-                                            </span>
-                                        ))}
+                                        {survey.options.map((option, index) => {
+                                            // Parsa i voti solo se sono una stringa
+                                            const votesArray = typeof survey.votes === 'string' ? parseVotes(survey.votes) : survey.votes;
+                                            const voteCount = votesArray[index] || 0; // Usa 0 come valore di default se l'indice non esiste
+
+                                            return (
+                                                <span key={index}>
+                                                    {option}: {voteCount} {voteCount === 1 ? "voto" : "voti"}
+                                                    {index < survey.options.length - 1 && ", "}
+                                                </span>
+                                            );
+                                        })}
                                     </p>
                                 </li>
                             ))}
