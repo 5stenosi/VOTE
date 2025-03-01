@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
+import Image from "next/image";
 
 interface User {
     id: string;
@@ -274,7 +275,7 @@ export default function ProfilePage() {
                                 className={`border-2 border-transparent hover:border-blue-500 cursor-pointer ${selectedAvatar === avatarUrl ? "border-blue-500" : ""
                                     }`}
                             >
-                                <img
+                                <Image
                                     src={avatarUrl}
                                     alt="Avatar predefinito"
                                     className="w-24 h-24 rounded-full mx-auto"
@@ -287,7 +288,7 @@ export default function ProfilePage() {
                 {/* Visualizza Avatar Selezionato */}
                 <div className="mb-6">
                     <h3 className="text-lg font-medium mb-2">Avatar selezionato:</h3>
-                    <img
+                    <Image
                         src={selectedAvatar || profile.avatar_url || "/default-avatar.png"}
                         alt="Foto profilo"
                         className="w-24 h-24 rounded-full mx-auto mb-2"
@@ -326,7 +327,7 @@ export default function ProfilePage() {
                     ) : (
                         <p className="text-gray-500">Non hai creato alcun sondaggio.</p>
                     )}
-                </div>  
+                </div>
 
                 {/* Sondaggi Votati */}
                 <div>
