@@ -39,9 +39,9 @@ export default function RootLayout({
     <html lang="en">
       <body>
         {/* Navbar inclusa in tutte le pagine */}
-        <Navbar user={user} />
+        {/* <Navbar user={user} /> */}
         {/* Contenuto delle pagine */}
-        <main className="p-8">{children}</main>
+        <main>{children}</main>
       </body>
     </html>
   );

@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
-import Image from "next/image";
 
 interface User {
     id: string;
@@ -46,6 +45,7 @@ export default function ProfilePage() {
             try {
                 // Recupera la sessione dell'utente
                 const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+                console.log("Session Data:", sessionData);
 
                 if (sessionError || !sessionData.session || !sessionData.session.user) {
                     alert("Devi essere autenticato per visualizzare il profilo.");
@@ -62,6 +62,7 @@ export default function ProfilePage() {
                     .select("*")
                     .eq("id", sessionUser.id)
                     .limit(1);
+                console.log("Profile Data:", profileData);
 
                 if (profileError) {
                     console.error("Errore durante il recupero del profilo:", profileError.message);
@@ -103,6 +104,7 @@ export default function ProfilePage() {
                     .from("surveys")
                     .select("*")
                     .eq("user_id", sessionUser.id);
+                console.log("Created Surveys:", createdSurveys);
 
                 if (createdSurveysError) {
                     console.error(
@@ -129,6 +131,7 @@ export default function ProfilePage() {
                     .from("survey_participants")
                     .select("survey_id, surveys (*)") // Include i dettagli dei sondaggi
                     .eq("user_id", sessionUser.id);
+                console.log("Voted Surveys:", votedSurveys);
 
                 if (votedSurveysError) {
                     console.error(
@@ -287,7 +290,7 @@ export default function ProfilePage() {
                                 className={`border-2 border-transparent hover:border-blue-500 cursor-pointer ${selectedAvatar === avatarUrl ? "border-blue-500" : ""
                                     }`}
                             >
-                                <Image
+                                <img
                                     src={avatarUrl}
                                     alt="Avatar predefinito"
                                     className="w-24 h-24 rounded-full mx-auto"
@@ -302,7 +305,7 @@ export default function ProfilePage() {
                 {/* Visualizza Avatar Selezionato */}
                 <div className="mb-6">
                     <h3 className="text-lg font-medium mb-2">Avatar selezionato:</h3>
-                    <Image
+                    <img
                         src={selectedAvatar || profile.avatar_url || "/default-avatar.png"}
                         alt="Foto profilo"
                         className="w-24 h-24 rounded-full mx-auto mb-2"

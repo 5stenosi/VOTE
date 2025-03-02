@@ -30,6 +30,9 @@ export default function RegisterPage() {
     const { error: authError } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        emailRedirectTo: 'https://openvoting.vercel.app',
+      },
     });
 
     if (authError) {
