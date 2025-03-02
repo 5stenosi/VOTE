@@ -1,7 +1,6 @@
 "use client";
 
 import "../styles/styles.css";
-import Navbar from "../components/Navbar";
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { User } from "@supabase/supabase-js"; // Importa il tipo User
@@ -11,7 +10,7 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const [user, setUser] = useState<User | null>(null); // Sostituisci any con User
+  const [, setUser] = useState<User | null>(null); // Sostituisci any con User
 
   useEffect(() => {
     const checkUser = async () => {
@@ -38,8 +37,6 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        {/* Navbar inclusa in tutte le pagine */}
-        {/* <Navbar user={user} /> */}
         {/* Contenuto delle pagine */}
         <main>{children}</main>
       </body>
