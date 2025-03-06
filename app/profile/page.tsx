@@ -1,19 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
-
-interface User {
-    id: string;
-    email: string;
-}
-
-interface Profile {
-    id: string;
-    username: string;
-    avatar_url: string | null;
-    updated_at: string;
-}
+import { useProfile } from "../../components/ProfileContext"; // Importa il context
 
 interface Survey {
     id: string;
@@ -24,87 +13,30 @@ interface Survey {
     created_at: string;
 }
 
-interface VotedSurvey {
-    survey_id: string;
-    surveys: Survey[]; // Cambiato da Survey a Survey[]
-}
-
 export default function ProfilePage() {
-    const [user, setUser] = useState<User | null>(null);
-    const [profile, setProfile] = useState<Profile | null>(null);
-    const [newUsername, setNewUsername] = useState("");
-    const [selectedAvatar, setSelectedAvatar] = useState<string | null>(null);
+    // Utilizza il context per ottenere i dati del profilo
+    const { user, profile, error: profileError, loading: profileLoading, updateProfile } = useProfile();
+
+    // Stati locali per la gestione del form
+    const [newUsername, setNewUsername] = useState(profile?.username || "");
+    const [selectedAvatar, setSelectedAvatar] = useState<string | null>(profile?.avatar_url || null);
     const [error, setError] = useState<string | null>(null);
 
     // Stati per i sondaggi
     const [surveysCreated, setSurveysCreated] = useState<Survey[]>([]);
-    const [surveysVoted, setSurveysVoted] = useState<Survey[]>([]);
+    const [surveysVoted, setSurveysVoted] = useState<{ survey: Survey; userVotes: number[] }[]>([]);
 
+    // Effetto per caricare i sondaggi creati
     useEffect(() => {
-        const fetchUserProfile = async () => {
+        if (!user) return;
+
+        const fetchSurveys = async () => {
             try {
-                // Recupera la sessione dell'utente
-                const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-                console.log("Session Data:", sessionData);
-
-                if (sessionError || !sessionData.session || !sessionData.session.user) {
-                    alert("Devi essere autenticato per visualizzare il profilo.");
-                    window.location.href = "/auth/login";
-                    return;
-                }
-
-                const sessionUser = sessionData.session.user as User;
-                setUser(sessionUser);
-
-                // Recupera il profilo utente dalla tabella profiles
-                const { data: profileData, error: profileError } = await supabase
-                    .from("profiles")
-                    .select("*")
-                    .eq("id", sessionUser.id)
-                    .limit(1);
-                console.log("Profile Data:", profileData);
-
-                if (profileError) {
-                    console.error("Errore durante il recupero del profilo:", profileError.message);
-                    setError("Impossibile caricare il tuo profilo. Riprova più tardi.");
-                    return;
-                }
-
-                if (!profileData || profileData.length === 0) {
-                    // Crea o aggiorna il profilo usando upsert
-                    const { error: createProfileError } = await supabase.from("profiles").upsert({
-                        id: sessionUser.id,
-                        username: sessionUser.email.split("@")[0],
-                        avatar_url: "/default-avatar.png",
-                    });
-
-                    if (createProfileError) {
-                        console.error(
-                            "Errore durante la creazione del profilo:",
-                            createProfileError.message
-                        );
-                        setError("Impossibile caricare il tuo profilo. Riprova più tardi.");
-                        return;
-                    }
-
-                    setProfile({
-                        id: sessionUser.id,
-                        username: sessionUser.email.split("@")[0],
-                        avatar_url: "/default-avatar.png",
-                        updated_at: new Date().toISOString(),
-                    });
-                } else {
-                    setProfile(profileData[0] as Profile);
-                    setNewUsername(profileData[0].username || "");
-                    setSelectedAvatar(profileData[0].avatar_url || "/default-avatar.png");
-                }
-
                 // Recupera i sondaggi creati dall'utente
                 const { data: createdSurveys, error: createdSurveysError } = await supabase
                     .from("surveys")
                     .select("*")
-                    .eq("user_id", sessionUser.id);
-                console.log("Created Surveys:", createdSurveys);
+                    .eq("user_id", user.id);
 
                 if (createdSurveysError) {
                     console.error(
@@ -113,68 +45,80 @@ export default function ProfilePage() {
                     );
                     setError("Impossibile caricare i tuoi sondaggi creati. Riprova più tardi.");
                 } else {
-                    // Converti i dati in Survey[]
-                    const typedCreatedSurveys = createdSurveys?.map((survey: Survey) => ({
-                        id: survey.id,
-                        title: survey.title,
-                        options: survey.options,
-                        votes: survey.votes,
-                        user_id: survey.user_id,
-                        created_at: survey.created_at,
-                    })) || [];
-
-                    setSurveysCreated(typedCreatedSurveys);
-                }
-
-                // Recupera i sondaggi in cui l'utente ha votato
-                const { data: votedSurveys, error: votedSurveysError } = await supabase
-                    .from("survey_participants")
-                    .select("survey_id, surveys (*)") // Include i dettagli dei sondaggi
-                    .eq("user_id", sessionUser.id);
-                console.log("Voted Surveys:", votedSurveys);
-
-                if (votedSurveysError) {
-                    console.error(
-                        "Errore durante il recupero dei sondaggi votati:",
-                        votedSurveysError.message
-                    );
-                    setError("Impossibile caricare i tuoi sondaggi votati. Riprova più tardi.");
-                } else {
-                    // Rimuovi duplicati basati sull'ID del sondaggio
-                    const uniqueVotedSurveys = Array.from(
-                        new Map(
-                            votedSurveys
-                                ?.map((v: VotedSurvey) => {
-                                    if (v.surveys && v.surveys.length > 0) {
-                                        const survey = v.surveys[0]; // Prendi il primo elemento dell'array
-                                        return [survey.id, survey] as [string, Survey]; // Usa l'ID del sondaggio come chiave
-                                    }
-                                    return null; // Ignora i valori nulli
-                                })
-                                .filter((entry): entry is [string, Survey] => entry !== null) // Filtra i valori nulli
-                        ).values()
-                    );
-
-                    // Converti i dati in Survey[]
-                    const typedVotedSurveys = Array.from(uniqueVotedSurveys).map((survey) => ({
-                        id: survey.id,
-                        title: survey.title,
-                        options: survey.options,
-                        votes: survey.votes,
-                        user_id: survey.user_id,
-                        created_at: survey.created_at,
-                    }));
-
-                    setSurveysVoted(typedVotedSurveys);
+                    setSurveysCreated(createdSurveys || []);
                 }
             } catch (error) {
-                console.error("Errore generico durante il caricamento del profilo:", error);
-                setError("Si è verificato un errore durante il caricamento del profilo.");
+                console.error("Errore generico durante il caricamento dei sondaggi:", error);
+                setError("Si è verificato un errore durante il caricamento dei sondaggi.");
             }
         };
 
-        fetchUserProfile();
-    }, []);
+        fetchSurveys();
+    }, [user]);
+
+    // Effetto per caricare i sondaggi partecipati
+    useEffect(() => {
+        if (!user) return;
+
+        const fetchSurveysVoted = async () => {
+            try {
+                console.log("Inizio recupero sondaggi votati...");
+
+                // Passo 1: Recupera gli ID dei sondaggi partecipati
+                const { data: participantData, error: participantError } = await supabase
+                    .from("survey_participants")
+                    .select("survey_id, user_votes")
+                    .eq("user_id", user.id);
+
+                if (participantError) {
+                    console.error("Errore durante il recupero dei partecipanti:", participantError.message);
+                    setError("Impossibile caricare i tuoi sondaggi votati. Riprova più tardi.");
+                    return;
+                }
+
+                console.log("Dati partecipanti:", participantData);
+
+                // Passo 2: Recupera i dettagli dei sondaggi
+                const surveyIds = participantData.map((participant) => participant.survey_id);
+                const { data: surveysData, error: surveysError } = await supabase
+                    .from("surveys")
+                    .select("*")
+                    .in("id", surveyIds);
+
+                if (surveysError) {
+                    console.error("Errore durante il recupero dei sondaggi:", surveysError.message);
+                    setError("Impossibile caricare i dettagli dei sondaggi. Riprova più tardi.");
+                    return;
+                }
+
+                console.log("Dettagli dei sondaggi:", surveysData);
+
+                // Passo 3: Combina i dati
+                const formattedSurveys = participantData.map((participant) => {
+                    const survey = surveysData.find((s) => s.id === participant.survey_id);
+
+                    if (!survey) {
+                        console.warn("Sondaggio non trovato, saltato. Survey ID:", participant.survey_id);
+                        return null;
+                    }
+
+                    return {
+                        survey,
+                        userVotes: participant.user_votes || [],
+                    };
+                }).filter((item): item is { survey: Survey; userVotes: number[] } => item !== null);
+
+                console.log("Sondaggi partecipati elaborati:", formattedSurveys);
+
+                setSurveysVoted(formattedSurveys);
+            } catch (error) {
+                console.error("Errore generico durante il caricamento dei sondaggi votati:", error);
+                setError("Si è verificato un errore durante il caricamento dei sondaggi votati.");
+            }
+        };
+
+        fetchSurveysVoted();
+    }, [user]);
 
     const validateUsername = (username: string): boolean => {
         const usernameRegex = /^[a-zA-Z0-9_]{3,}$/; // Almeno 3 caratteri, solo lettere, numeri e underscore
@@ -183,13 +127,15 @@ export default function ProfilePage() {
 
     // Funzione per aggiornare il profilo
     const handleUpdateProfile = async () => {
+        if (!user || !profile) return;
+
         if (!validateUsername(newUsername)) {
             setError("L'username deve contenere almeno 3 caratteri e non può contenere spazi.");
             return;
         }
 
         // Verifica se l'username è già in uso
-        if (newUsername !== profile?.username) {
+        if (newUsername !== profile.username) {
             const { data: existingUsers, error: checkError } = await supabase
                 .from("profiles")
                 .select("id")
@@ -210,26 +156,24 @@ export default function ProfilePage() {
 
         // Aggiorna il profilo
         const updates = {
-            id: user?.id,
+            id: user.id,
             username: newUsername.trim(),
             avatar_url: selectedAvatar || null,
         };
 
-        const { error: updateError } = await supabase.from("profiles").update(updates).eq("id", user?.id);
+        const { error: updateError } = await supabase.from("profiles").update(updates).eq("id", user.id);
 
         if (updateError) {
             console.error("Errore durante l'aggiornamento del profilo:", updateError.message);
             setError("Impossibile aggiornare il profilo. Riprova più tardi.");
         } else {
-            setProfile((prevProfile) => {
-                if (!prevProfile) return null;
-                return {
-                    ...prevProfile,
-                    username: newUsername.trim(),
-                    avatar_url: selectedAvatar || null,
-                };
+            // Aggiorna il profilo nel context
+            updateProfile({
+                ...profile,
+                username: newUsername.trim(),
+                avatar_url: selectedAvatar || null,
             });
-            setError(null); // Resetta eventuali errori precedenti
+            setError(null);
             alert("Profilo aggiornato con successo!");
         }
     };
@@ -239,7 +183,7 @@ export default function ProfilePage() {
         setSelectedAvatar(avatarUrl);
     };
 
-    if (!user || !profile) return <div>Caricamento...</div>;
+    if (profileLoading || !user || !profile) return <div>Caricamento...</div>;
 
     const parseVotes = (votes: string): number[] => {
         try {
@@ -255,9 +199,10 @@ export default function ProfilePage() {
             <div className="p-8 bg-white shadow-md rounded-md w-full max-w-lg">
                 <h2 className="text-2xl font-bold mb-4">Il tuo profilo</h2>
                 {error && <p className="text-red-500 mb-4">{error}</p>}
+                {profileError && <p className="text-red-500 mb-4">{profileError}</p>}
                 <div className="mb-6">
-                    <p className="text-lg font-medium">Username corrente: {profile.username}</p>
-                    <p className="text-gray-600">Email: {user.email}</p>
+                    <p className="text-lg font-medium">Username corrente: {profile?.username}</p>
+                    <p className="text-gray-600">Email: {user?.email}</p>
                 </div>
 
                 {/* Modifica Username */}
@@ -294,8 +239,8 @@ export default function ProfilePage() {
                                     src={avatarUrl}
                                     alt="Avatar predefinito"
                                     className="w-24 h-24 rounded-full mx-auto"
-                                    width={96} // Add width property
-                                    height={96} // Add height property
+                                    width={96}
+                                    height={96}
                                 />
                             </div>
                         ))}
@@ -309,8 +254,8 @@ export default function ProfilePage() {
                         src={selectedAvatar || profile.avatar_url || "/default-avatar.png"}
                         alt="Foto profilo"
                         className="w-24 h-24 rounded-full mx-auto mb-2"
-                        width={96} // Add width property
-                        height={96} // Add height property
+                        width={96}
+                        height={96}
                     />
                 </div>
 
@@ -334,10 +279,8 @@ export default function ProfilePage() {
                                     </a>
                                     <p className="text-gray-600">
                                         {survey.options.map((option, index) => {
-                                            // Parsa i voti solo se sono una stringa
                                             const votesArray = typeof survey.votes === 'string' ? parseVotes(survey.votes) : survey.votes;
-                                            const voteCount = votesArray[index] || 0; // Usa 0 come valore di default se l'indice non esiste
-
+                                            const voteCount = votesArray[index] || 0;
                                             return (
                                                 <span key={index}>
                                                     {option}: {voteCount} {voteCount === 1 ? "voto" : "voti"}
@@ -354,14 +297,26 @@ export default function ProfilePage() {
                     )}
                 </div>
 
-                {/* Sondaggi Votati */}
-                <div>
-                    <h3 className="text-lg font-medium mb-2">Sondaggi Votati:</h3>
+                {/* Sondaggi Partecipati */}
+                <div className="mb-6">
+                    <h3 className="text-lg font-medium mb-2">Sondaggi Partecipati:</h3>
                     {surveysVoted.length > 0 ? (
                         <ul>
-                            {surveysVoted.map((survey) => (
-                                <li key={survey.id} className="mb-2">
-                                    {survey.title}
+                            {surveysVoted.map(({ survey, userVotes }) => (
+                                <li key={survey.id} className="mb-4">
+                                    <h4 className="text-xl font-semibold">{survey.title}</h4>
+                                    <p className="text-gray-600">
+                                        Hai votato:
+                                        {survey.options.map((option, index) => {
+                                            const hasVoted = userVotes.includes(index);
+                                            return (
+                                                <span key={index} className={`${hasVoted ? "font-bold" : ""}`}>
+                                                    {hasVoted ? ` ${option}` : ""}
+                                                    {index < survey.options.length - 1 && hasVoted && ", "}
+                                                </span>
+                                            );
+                                        })}
+                                    </p>
                                 </li>
                             ))}
                         </ul>

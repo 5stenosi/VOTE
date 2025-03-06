@@ -1,1 +1,46 @@
 @import "tailwindcss";
+
+@plugin "tailwindcss-motion";
+
+@theme {
+
+    --color-oxley-50: #f2f7f4;
+    --color-oxley-100: #e1eae2;
+    --color-oxley-200: #c4d6c9;
+    --color-oxley-300: #9cb9a5;
+    /* default */
+    --color-oxley-400: #7b9e87;
+    --color-oxley-500: #50795f;
+    --color-oxley-600: #3c5f4a;
+    --color-oxley-700: #304c3c;
+    --color-oxley-800: #283d31;
+    --color-oxley-900: #213329;
+    --color-oxley-950: #121c17;
+
+    --color-punch-50: #fdf4f3;
+    --color-punch-100: #fce7e4;
+    --color-punch-200: #fbd4cd;
+    --color-punch-300: #f7b5aa;
+    --color-punch-400: #f08a79;
+    --color-punch-500: #e5634e;
+    /* default */
+    --color-punch-600: #d1462f;
+    --color-punch-700: #b03925;
+    --color-punch-800: #923222;
+    --color-punch-900: #792f23;
+    --color-punch-950: #42150d;
+
+    --color-energy-yellow-50: #fdfbe9;
+    --color-energy-yellow-100: #faf7c7;
+    --color-energy-yellow-200: #f6eb92;
+    /* default */
+    --color-energy-yellow-300: #f2dc5d;
+    --color-energy-yellow-400: #ebc524;
+    --color-energy-yellow-500: #dbad17;
+    --color-energy-yellow-600: #bd8711;
+    --color-energy-yellow-700: #976211;
+    --color-energy-yellow-800: #7d4e16;
+    --color-energy-yellow-900: #6b4018;
+    --color-energy-yellow-950: #3e220a;
+
+}

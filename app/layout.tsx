@@ -4,6 +4,7 @@ import "../styles/styles.css";
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { User } from "@supabase/supabase-js"; // Importa il tipo User
+import { ProfileProvider } from "../components/ProfileContext";
 
 export default function RootLayout({
   children,
@@ -38,7 +39,11 @@ export default function RootLayout({
     <html lang="en">
       <body>
         {/* Contenuto delle pagine */}
-        <main>{children}</main>
+        <main>
+          <ProfileProvider>
+            {children}
+          </ProfileProvider>
+        </main>
       </body>
     </html>
   );
